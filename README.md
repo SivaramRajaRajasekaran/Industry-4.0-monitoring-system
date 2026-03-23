@@ -222,4 +222,4 @@ docker compose up -d --build
 
 ---
 
-*Built with ❤️ as an Industry 4.0 portfolio project*
+*Built with ❤️ as an Industry 4.0*
