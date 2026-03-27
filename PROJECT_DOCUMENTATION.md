@@ -1,10 +1,10 @@
 # Project Documentation
-## Industry 4.0 Machine Monitoring System
+## Industry 4.0 Machine Monitoring System with OT Security
 
 ---
 
-# Die deutsche Version finden Sie weiter unten.
-# The German version can be found below.
+> 🇩🇪 Die deutsche Version finden Sie weiter unten.
+> 🇬🇧 The German version can be found below.
 
 ---
 
@@ -16,43 +16,38 @@ This project implements a complete Industry 4.0 monitoring pipeline for a simula
 
 The system monitors 4 machines simultaneously, calculates OEE (Overall Equipment Effectiveness) metrics, tracks downtime, and presents data through two dashboards: a live operator view (Node-RED) and a historical analytics view (Grafana).
 
+The project also includes a complete **OT Security module** — simulating real-world cyberattacks on the MQTT infrastructure, building a rule-based Intrusion Detection System (IDS), and implementing MQTT authentication as a prevention layer.
+
 ---
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Docker Environment                       │
+│                    Docker Environment                        │
 │                                                             │
-│  ┌──────────────┐    MQTT      ┌──────────────┐             │
+│  ┌──────────────┐    MQTT      ┌──────────────┐            │
 │  │  Simulator   │ ──────────▶  │  Mosquitto   │            │
-│  │ (4 machines) │  port 1883   │  MQTT Broker │             │
-│  └──────────────┘              └──────┬───────┘             │
+│  │ (4 machines) │  port 1883   │  MQTT Broker │            │
+│  └──────────────┘              │  + Auth      │            │
+│                                └──────┬───────┘            │
 │                                       │ MQTT                │
 │                                       ▼                     │
-│                               ┌──────────────┐              │
-│                               │   Node-RED   │              │
-│                               │  port 1880   │              │
-│                               └──────┬───────┘              │
+│                               ┌──────────────┐             │
+│                               │   Node-RED   │             │
+│                               │  port 1880   │             │
+│                               │  + IDS Engine│             │
+│                               └──────┬───────┘             │
 │                                      │                      │
-│                    ┌─────────────────┼──────────────┐       │
+│                    ┌─────────────────┼──────────────┐      │
 │                    ▼                 ▼               ▼      │
-│             ┌──────────┐    ┌──────────────┐  ┌─────────┐   │
-│             │ Node-RED │    │   InfluxDB   │  │ Grafana │   │
-│             │Dashboard │    │  port 8086   │  │port 3000│   │
-│             │port 1880 │    └──────────────┘  └─────────┘   │
+│             ┌──────────┐    ┌──────────────┐  ┌─────────┐  │
+│             │ Node-RED │    │   InfluxDB   │  │ Grafana │  │
+│             │Dashboard │    │  port 8086   │  │port 3000│  │
+│             │+ Alerts  │    └──────────────┘  └─────────┘  │
 │             └──────────┘                                    │
 └─────────────────────────────────────────────────────────────┘
 ```
-
-**Data Flow:**
-1. Python simulator generates machine data every 3 seconds for 4 machines
-2. Data published to MQTT topics: `factory/machine1/data` ... `factory/machine4/data`
-3. Node-RED subscribes to `factory/+/data` (wildcard — all machines in one subscription)
-4. Node-RED validates, processes, and calculates OEE metrics per machine
-5. Processed data stored in InfluxDB time-series database
-6. Node-RED Dashboard shows live current values per machine
-7. Grafana Dashboard shows historical trends, OEE gauges, and time-series charts
 
 ---
 
@@ -60,217 +55,402 @@ The system monitors 4 machines simultaneously, calculates OEE (Overall Equipment
 
 | Technology | Version | Purpose |
 |-----------|---------|---------|
-| Python | 3.11 | Machine data simulator |
+| Python | 3.11 | Machine data simulator + attack scripts |
 | paho-mqtt | 1.6.1 | MQTT client library |
 | Docker | Latest | Container orchestration |
-| Eclipse Mosquitto | Latest | MQTT broker |
-| Node-RED | Latest | Data processing & live dashboard |
+| Eclipse Mosquitto | 2.1.2 | MQTT broker with authentication |
+| Node-RED | Latest | Data processing, IDS engine, live dashboard |
 | node-red-contrib-influxdb | Latest | InfluxDB integration for Node-RED |
 | @flowfuse/node-red-dashboard | 1.30.2 | Node-RED Dashboard 2.0 |
 | InfluxDB | 2.7 | Time-series database |
-| Grafana | 10.4.0 | Historical analytics dashboard |
-
----
-
-### Technology Choices — Why These Tools?
-
-**MQTT + Mosquitto** — MQTT is the industry standard lightweight protocol for IoT sensor data. It uses a publish-subscribe model, meaning machines (publishers) send data to a broker, and Node-RED (subscriber) receives it without the machines needing to know who is listening. This decoupling is essential in real factory environments.
-
-**Node-RED** — A flow-based programming tool widely used in industrial IoT. It allows visual wiring of data flows without complex code. Used here for data validation, OEE calculation, and live dashboard display.
-
-**InfluxDB** — A time-series database purpose-built for sensor data. Unlike relational databases, it is optimised for storing and querying data points with timestamps — exactly what machine monitoring generates every 3 seconds.
-
-**Grafana** — The industry standard for operational dashboards. Used by companies like Siemens, Bosch, and ABB for industrial monitoring. Connected to InfluxDB, it enables historical analysis, trend visualisation, and threshold-based alerting.
-
-**Docker** — Containerisation ensures the entire system runs identically on any machine. All 5 services (simulator, broker, Node-RED, database, dashboard) start with a single command.
+| Grafana | 10.4.0 | Historical analytics + security timeline |
 
 ---
 
 ### Machine Configuration
 
-| Machine | ON Probability | OFF Probability | Temp Range (ON) | Temp Range (OFF) |
-|---------|---------------|-----------------|-----------------|------------------|
-| Machine 1 | 80% | 20% | 45–75°C | 30–40°C |
-| Machine 2 | 82% | 18% | 50–80°C | 30–40°C |
-| Machine 3 | 86% | 14% | 40–70°C | 30–40°C |
-| Machine 4 | 85% | 15% | 42–72°C | 30–40°C |
+| Machine | ON Probability | OFF Probability | Temp Range (ON) |
+|---------|---------------|-----------------|-----------------|
+| Machine 1 | 80% | 20% | 45–75°C |
+| Machine 2 | 82% | 18% | 50–80°C |
+| Machine 3 | 86% | 14% | 40–70°C |
+| Machine 4 | 85% | 15% | 42–72°C |
 
-Each machine publishes every 3 seconds with:
-- `machine_id` — unique identifier
-- `status` — ON or OFF
-- `temperature` — current reading in °C
-- `production_count` — cumulative units produced
-- `timestamp` — ISO format datetime
+**OEE Thresholds (Industry Standard):**
+- 🔴 Below 50% — Poor
+- 🟡 50–85% — Acceptable
+- 🟢 Above 85% — World Class
 
 ---
 
 ### OEE Calculation
 
-OEE (Overall Equipment Effectiveness) is the global standard for measuring manufacturing productivity. Full OEE = Availability × Performance × Quality.
-
-This project implements **Availability-based OEE** — a simplified but valid approach when Performance and Quality sensor data are not available:
-
 ```
 Availability = (Total Time - Downtime) / Total Time × 100
 ```
 
-Where:
-- **Total Time** = number of messages received × 3 seconds
-- **Downtime** = number of OFF messages × 3 seconds
-- **Runtime** = Total Time - Downtime
-
-**Industry OEE Thresholds:**
-- 🔴 Below 50% — Poor performance, immediate attention required
-- 🟡 50–85% — Acceptable, room for improvement
-- 🟢 Above 85% — World Class manufacturing performance
+Where Total Time = messages × 3 seconds, Downtime = OFF messages × 3 seconds.
 
 ---
 
 ### Node-RED Flow Design
 
-The flow uses a single tab handling all 4 machines:
-
-**Parse & Validate** — Single entry point for all MQTT messages. Converts raw JSON string to object, validates required fields, drops malformed messages. Acts as a guard clause preventing downstream crashes.
-
-**MQTT Wildcard** — The topic `factory/+/data` uses MQTT's single-level wildcard `+` to subscribe to all 4 machine topics simultaneously in one node.
-
-**Machine-specific filters** — Each display widget receives data from a small function node that filters by `machine_id` — only the relevant machine's data reaches each widget.
-
-**Downtime & Availability** — A single function node handles all 4 machines using `machine_id` as a key for separate flow context variables (`downtime_machine1`, `downtime_machine2` etc.). This prevents cross-machine data mixing.
-
-**Save to InfluxDB** — Receives the complete enriched payload (including calculated downtime and availability) and writes one data point per message cycle.
+- **Parse & Validate** — single entry point, validates all messages
+- **MQTT Wildcard** — `factory/+/data` subscribes to all 4 machines
+- **IDS Engine** — security rule checker on every message
+- **Machine filters** — per-machine display routing
+- **Downtime & Availability** — OEE calculation using machine_id keys
+- **Save to InfluxDB** — stores complete enriched payload
 
 ---
 
-### Dashboard Design
+---
 
-**Node-RED Dashboard (Live Operator View)**
-- Purpose: Real-time monitoring — what is happening right now
-- Updates every 3 seconds (matches simulator interval)
-- Shows: Status (ON/OFF), Temperature gauge, Production count, Downtime, Availability
-- 4 machine groups on one page for side-by-side comparison
+## OT Security Module
 
-**Grafana Dashboard (Historical Analytics View)**
-- Purpose: Trend analysis — what happened over time
-- Auto-refreshes every 5–10 seconds
-- Per-machine rows, collapsible
-- Panels: OEE gauge, Temperature time-series, Downtime trend, Production count trend
-- Uses Flux query language with `pivot` to filter by machine_id
+### What is OT Security?
+
+**OT (Operational Technology) Security** protects industrial systems — factory machines, power grids, water treatment plants — from cyberattacks. Unlike IT security which protects data, OT security protects physical processes where a successful attack causes real-world damage.
+
+**Why MQTT is vulnerable by default:**
+- No authentication — anyone on the network can connect
+- No authorisation — any client can publish to any topic
+- No encryption — all messages are plain text
+- No rate limiting — anyone can flood the broker
+
+This project demonstrates all four vulnerabilities through simulated attacks, then implements defences.
 
 ---
 
-### OT Security Module *(Coming Soon)*
+### Reconnaissance
 
-> 🚧 **Under Development**
+**Script:** `Attack Vectors/recon.py`
 
-The next phase will simulate real-world OT security scenarios:
+Before attacking, a real attacker silently observes the target. The recon script connects to Mosquitto without credentials, subscribes to `#` (all topics), and records all traffic without sending anything.
 
-**Attack Simulation**
-- Rogue MQTT client injecting false sensor data
-- Unauthorised topic injection
-- Data spoofing — sending fabricated machine_id values
+**Intelligence gathered from recon:**
+```
+Topics discovered  : factory/machine1-4/data
+Machine IDs found  : machine1, machine2, machine3, machine4
+Status values      : ON, OFF
+Temperature range  : 30.25°C — 79.77°C
+Message interval   : ~0.7s combined (3s per machine)
+Message format     : machine_id (str), status (str),
+                     temperature (float), production_count (int)
+```
 
-**Detection**
-- Node-RED anomaly detection rules
-- Temperature spike alerts (outside normal operating range)
-- Unknown machine_id detection
-- Grafana alert panels
-
-**Prevention**
-- MQTT broker authentication (username/password)
-- MQTT ACL (Access Control Lists) — restricting which clients can publish to which topics
-- TLS encryption for MQTT connections
-- Alert notifications via Grafana
-
-This module will directly demonstrate the security vulnerabilities inherent in unauthenticated MQTT systems — a common attack surface in real ICS/SCADA environments.
+This reconnaissance is completely invisible — Mosquitto logs no subscriber connections by default. The attacker now knows everything needed to craft undetectable fake messages.
 
 ---
+
+### Attack 1 — Data Injection
+
+**Script:** `Attack Vectors/attack1.py`
+
+Connects to Mosquitto and publishes fake sensor data to `factory/machine1/data` at the same 3-second interval as the legitimate simulator.
+
+**Fake data characteristics:**
+- Temperature: 15–25°C (suspiciously low — hiding overheating)
+- Production count: 9000–9999 (unrealistically high)
+- Status: always ON (hiding machine failures)
+
+**Effect:** Node-RED receives both real and fake messages. Dashboard temperature flickers between normal and injected values. InfluxDB stores corrupted records permanently.
+
+**Evidence:** InfluxDB temperature chart shows a violent zigzag pattern — alternating between normal operating range (45-75°C) and injected low values (15-25°C).
+
+**Real-world equivalent:** An attacker hides a machine that is overheating. The operator sees normal readings while the machine physically destroys itself. This is the same principle used in the Stuxnet attack (2010) against Iranian nuclear centrifuges.
+
+---
+
+### Attack 2 — Message Flooding (DoS)
+
+**Script:** `Attack Vectors/attack2.py`
+
+Launches 4 simultaneous threads, each flooding one machine topic at 50 messages/second.
+
+| Metric | Value |
+|--------|-------|
+| Total flood rate | ~200 messages/second |
+| Normal system rate | ~1.3 messages/second |
+| Amplification factor | 150× |
+| Duration | 60 seconds |
+| Total messages sent | 11,534 |
+
+**Effect:** Node-RED message queue overwhelmed. Dashboard values flicker and become unreliable. Legitimate machine data buried in flood traffic.
+
+**Real-world equivalent:** A Denial of Service (DoS) attack on an industrial control system. Operators cannot trust any readings and may be forced into emergency shutdown.
+
+---
+
+### Attack 3 — Identity Spoofing
+
+**Script:** `Attack Vectors/attack3.py`
+
+**Scenario 1 — Ghost Machine:**
+Injects a fake `machine5` that doesn't exist. Node-RED's wildcard topic accepts it automatically. Ghost machine data stored permanently in InfluxDB.
+
+**Scenario 2 — Identity Confusion:**
+Sends messages with variations of valid machine IDs:
+
+| Spoofed ID | Technique |
+|-----------|-----------|
+| `Machine1` | Capital letter |
+| `machine_1` | Underscore |
+| `machine 1` | Space injection |
+| `machine-1` | Hyphen |
+| `machine01` | Zero padded |
+| `MACHINE1` | All caps |
+
+**Verified result:** InfluxDB confirmed all fake IDs stored alongside legitimate data — permanently corrupting historical records and OEE analytics.
+
+---
+
+### Prevention — MQTT Authentication
+
+**Files:** `mosquitto/mosquitto.conf`, `mosquitto/passwd`
+
+**Key configuration:**
+```ini
+allow_anonymous false
+password_file /mosquitto/config/passwd
+```
+
+**Users created:**
+- `simulator` — for the machine simulator container
+- `nodered` — for Node-RED subscription
+
+**Setup steps:**
+1. Create `mosquitto/mosquitto.conf` with `allow_anonymous false`
+2. Create `mosquitto/passwd` with plain text credentials
+3. Hash passwords using Mosquitto's tool:
+   ```bash
+   docker run --rm -v "./mosquitto:/mosquitto/config" \
+   eclipse-mosquitto mosquitto_passwd -U /mosquitto/config/passwd
+   ```
+4. Mount config files in docker-compose.yml
+5. Add credentials to simulator: `client.username_pw_set("simulator", "password")`
+6. Add credentials in Node-RED broker Security tab
+
+**Result from Mosquitto logs:**
+```
+simulator    → connected successfully (u'simulator')
+nodered      → connected successfully (u'nodered')
+rogue_attacker_001 → disconnected: not authorised
+```
+
+**Important limitation:** Authentication prevents unauthorised connections but not insider threats or compromised credentials. The IDS detection layer is essential as a second line of defence.
+
+---
+
+### Detection — IDS Engine
+
+**Location:** Node-RED function node "IDS Engine"
+
+Runs on every incoming MQTT message. Checks 4 rules. Outputs alert objects when threats detected.
+
+#### Rule 1 — Unknown Machine ID
+**Catches:** Attack 3 (spoofing, ghost machines)
+**Severity:** HIGH
+
+```javascript
+const VALID_MACHINES = ['machine1','machine2','machine3','machine4'];
+if (!VALID_MACHINES.includes(mid)) → ALERT: UNKNOWN_MACHINE_ID
+```
+
+Any message from an unrecognised machine_id triggers an immediate alert. Catches ghost machines, identity confusion, and any future unauthorised device.
+
+#### Rule 2 — Temperature Anomaly
+**Catches:** Attack 1 (data injection)
+**Severity:** HIGH / CRITICAL
+
+```javascript
+// ON machine with impossibly low temperature = injection
+if (status === 'ON' && temperature < 28) → TEMPERATURE_ANOMALY [HIGH]
+
+// Any machine above safe operating limit
+if (temperature > 85) → TEMPERATURE_CRITICAL [CRITICAL]
+```
+
+When a machine is ON, temperature below 28°C is physically impossible under normal operation — it indicates injected false readings designed to hide overheating.
+
+#### Rule 3 — Message Flood Detection
+**Catches:** Attack 2 (flooding)
+**Severity:** CRITICAL
+
+```javascript
+// Count messages in 3-second sliding window
+// Normal = ~4 messages per 3s
+// Alert threshold = 10 messages per 3s (2.5× normal)
+if (messagesInWindow > FLOOD_THRESHOLD) → MESSAGE_FLOOD [CRITICAL]
+```
+
+Uses a sliding window counter stored in flow context. Alert rate-limited to once per 5 seconds to prevent alert flooding during sustained attacks.
+
+#### Rule 4 — Suspicious Production Count
+**Catches:** Attack 1 (injected fake counts)
+**Severity:** MEDIUM
+
+```javascript
+// Real machines start at 0 and increment 1-6 per cycle
+// Attack 1 injects random counts 9000-9999
+if (production_count > 8000) → SUSPICIOUS_PRODUCTION_COUNT [MEDIUM]
+```
+
+---
+
+### Alert System
+
+**Node-RED Dashboard popup:**
+```
+⚠️ [HIGH] Temp too low on machine1 — possible injection | 10:56:09 AM
+```
+- Appears top-right corner
+- Colour coded by severity
+- Auto-dismisses after 15 seconds
+- All 4 alert types produce distinct messages
+
+**InfluxDB storage:**
+All alerts stored in `machine_data` bucket, `security_alerts` measurement with fields: `type`, `severity`, `machine_id`, `detail`, `timestamp`
+
+**Grafana Security Monitor row:**
+- Security Events Timeline — red bar chart showing attack periods
+- Total Alerts (last 1h) — real-time alert count stat panel
+
+---
+
+### Lessons Learned
+
+**1. MQTT is insecure by default**
+Default Mosquitto allows anonymous connections from any network client. Security must be explicitly configured — it is not enabled out of the box. Many real factory deployments still run with no authentication.
+
+**2. Passive reconnaissance is undetectable**
+The recon script gathered complete system intelligence without sending a single message. No Mosquitto log entry exists for subscriber connections. An attacker can study a system indefinitely before attacking.
+
+**3. Authentication alone is not enough — defence in depth is required**
+MQTT authentication blocks unauthorised connections. But a compromised credential or insider threat bypasses it entirely. The IDS detection layer catches attacks that authentication cannot prevent.
+
+**4. OT attacks target operator trust, not just data**
+The most dangerous aspect of data injection is not the corrupted values — it is that the operator dashboard looks completely normal. The operator has no reason to suspect anything. This is the core principle of sophisticated OT attacks: make the monitoring system lie while physical damage occurs.
+
+**5. Rule-based IDS has known limitations**
+Our IDS detects known attack patterns with fixed thresholds. A sophisticated attacker who stays within normal temperature ranges and message rates would not be detected. Production-grade OT IDS systems (Claroty, Dragos, Nozomi Networks) use machine learning and behavioural baselines to detect subtle anomalies that rule-based systems miss.
+
+---
+
+### Security Architecture Summary
+
+```
+┌─────────────────────────────────────────┐
+│           Defence in Depth              │
+│                                         │
+│  Layer 1: Prevention                    │
+│  └─ MQTT Authentication                 │
+│     Blocks unauthorised connections     │
+│                                         │
+│  Layer 2: Detection                     │
+│  └─ Node-RED IDS Engine (4 rules)       │
+│     Catches attacks that get through    │
+│                                         │
+│  Layer 3: Response                      │
+│  └─ Real-time alerts (Node-RED popup)   │
+│     Security audit log (InfluxDB)       │
+│     Attack timeline (Grafana)           │
+└─────────────────────────────────────────┘
+```
+
+---
+
 ---
 
 ## 🇩🇪 Deutsch
 
 ### Projektüberblick
 
-Dieses Projekt implementiert eine vollständige Industrie-4.0-Überwachungspipeline für eine simulierte Fabrikumgebung. Es demonstriert, wie moderne Industriesysteme Maschinendaten in Echtzeit erfassen, übertragen, verarbeiten, speichern und visualisieren — mit denselben Werkzeugen und Protokollen, die in professionellen Industrieumgebungen eingesetzt werden.
-
-Das System überwacht 4 Maschinen gleichzeitig, berechnet OEE-Kennzahlen (Overall Equipment Effectiveness), verfolgt Stillstandszeiten und präsentiert Daten über zwei Dashboards: eine Live-Betreiberansicht (Node-RED) und eine historische Analyseansicht (Grafana).
+Dieses Projekt implementiert eine vollständige Industrie-4.0-Überwachungspipeline mit einem vollständigen **OT-Sicherheitsmodul** — Angriffssimulation, regelbasiertem Intrusion Detection System (IDS) und MQTT-Authentifizierung.
 
 ---
 
-### Verwendete Technologien
+### OT-Sicherheitsmodul
 
-| Technologie | Version | Verwendungszweck |
-|------------|---------|-----------------|
-| Python | 3.11 | Maschinendaten-Simulator |
-| paho-mqtt | 1.6.1 | MQTT-Client-Bibliothek |
-| Docker | Aktuell | Container-Orchestrierung |
-| Eclipse Mosquitto | Aktuell | MQTT-Broker |
-| Node-RED | Aktuell | Datenverarbeitung & Live-Dashboard |
-| InfluxDB | 2.7 | Zeitreihendatenbank |
-| Grafana | 10.4.0 | Historisches Analyse-Dashboard |
+#### Was ist OT-Sicherheit?
 
----
+**OT-Sicherheit (Operational Technology)** schützt industrielle Systeme vor Cyberangriffen. Im Gegensatz zur IT-Sicherheit schützt OT-Sicherheit physische Prozesse, bei denen ein erfolgreicher Angriff reale Schäden verursachen kann.
 
-### Maschinenkonfiguration
-
-| Maschine | EIN-Wahrscheinlichkeit | AUS-Wahrscheinlichkeit | Temperaturbereich (EIN) |
-|----------|----------------------|----------------------|------------------------|
-| Maschine 1 | 80% | 20% | 45–75°C |
-| Maschine 2 | 82% | 18% | 50–80°C |
-| Maschine 3 | 86% | 14% | 40–70°C |
-| Maschine 4 | 85% | 15% | 42–72°C |
+**Warum MQTT standardmäßig unsicher ist:**
+- Keine Authentifizierung — jeder im Netzwerk kann sich verbinden
+- Keine Autorisierung — jeder Client kann in jedem Topic veröffentlichen
+- Keine Verschlüsselung — alle Nachrichten sind im Klartext
+- Kein Rate-Limiting — jeder kann den Broker überfluten
 
 ---
 
-### OEE-Berechnung
+#### Aufklärung
 
-OEE (Overall Equipment Effectiveness) ist der globale Standard zur Messung der Fertigungsproduktivität. Dieses Projekt implementiert eine **verfügbarkeitsbasierte OEE**:
+**Skript:** `Attack Vectors/recon.py`
 
+Verbindet sich anonym mit Mosquitto, abonniert alle Topics (`#`) und zeichnet den gesamten Datenverkehr auf — völlig unsichtbar für den Fabrikbetreiber.
+
+---
+
+#### Angriff 1 — Dateninjektion
+
+**Skript:** `Attack Vectors/attack1.py`
+
+Sendet gefälschte Sensordaten mit unrealistisch niedrigen Temperaturen (15–25°C) und überhöhten Produktionszählern (9000–9999). Das Dashboard zeigt normale Werte — die Maschine könnte tatsächlich überhitzen. Entspricht dem Prinzip des Stuxnet-Angriffs (2010).
+
+---
+
+#### Angriff 2 — Nachrichtenüberflutung (DoS)
+
+**Skript:** `Attack Vectors/attack2.py`
+
+Überflutet alle 4 MQTT-Topics mit 200 Nachrichten/Sekunde (150× normale Rate). 11.534 gefälschte Nachrichten in 60 Sekunden. Das Dashboard wird unzuverlässig.
+
+---
+
+#### Angriff 3 — Identitätsspoofing
+
+**Skript:** `Attack Vectors/attack3.py`
+
+Injiziert eine nicht existierende `machine5` und sendet Nachrichten mit ungültigen machine_id-Varianten. Alle werden dauerhaft in InfluxDB gespeichert und korrumpieren historische Analysen.
+
+---
+
+#### Prävention — MQTT-Authentifizierung
+
+```ini
+allow_anonymous false
+password_file /mosquitto/config/passwd
 ```
-Verfügbarkeit = (Gesamtzeit - Stillstandszeit) / Gesamtzeit × 100
+
+Angreifer ohne gültige Anmeldedaten werden sofort abgewiesen:
+```
+Client rogue_attacker_001 disconnected: not authorised
 ```
 
-**OEE-Schwellenwerte (Industriestandard):**
-- 🔴 Unter 50% — Schlecht, sofortiger Handlungsbedarf
-- 🟡 50–85% — Akzeptabel, Verbesserungspotenzial vorhanden
-- 🟢 Über 85% — Weltklasse-Fertigungsleistung
+---
+
+#### Erkennung — IDS-Engine
+
+**4 Erkennungsregeln in Node-RED:**
+
+| Regel | Erkennt | Schweregrad |
+|-------|---------|-------------|
+| Unbekannte machine_id | Spoofing (Angriff 3) | HOCH |
+| Temperatur außerhalb Bereich | Injektion (Angriff 1) | HOCH/KRITISCH |
+| Nachrichtenrate zu hoch | Überflutung (Angriff 2) | KRITISCH |
+| Verdächtiger Produktionszähler | Injektion (Angriff 1) | MITTEL |
 
 ---
 
-### Dashboard-Design
+#### Gelernte Lektionen
 
-**Node-RED Dashboard (Live-Betreiberansicht)**
-- Zweck: Echtzeit-Überwachung — was passiert gerade jetzt
-- Aktualisierung alle 3 Sekunden
-- Zeigt: Status (EIN/AUS), Temperaturanzeige, Produktionszähler, Stillstandszeit, Verfügbarkeit
-
-**Grafana Dashboard (Historische Analyseansicht)**
-- Zweck: Trendanalyse — was ist im Laufe der Zeit passiert
-- Pro-Maschinen-Zeilen, einklappbar
-- Panels: OEE-Anzeige, Temperatur-Zeitreihe, Stillstandstrend, Produktionszähltrend
+1. MQTT ist standardmäßig unsicher — Sicherheit muss explizit konfiguriert werden
+2. Passive Aufklärung ist nicht nachweisbar
+3. Authentifizierung allein reicht nicht — Tiefenverteidigung ist erforderlich
+4. OT-Angriffe untergraben das Vertrauen des Bedieners
+5. Regelbasierte IDS haben Grenzen — produktionsreife Systeme nutzen ML (Claroty, Dragos, Nozomi)
 
 ---
 
-### OT-Sicherheitsmodul *(Demnächst verfügbar)*
-
-> 🚧 **In Entwicklung**
-
-**Angriffssimulation**
-- Rogue MQTT-Client injiziert falsche Sensordaten
-- Unbefugte Topic-Injektion
-- Datenverfälschung durch gefälschte machine_id-Werte
-
-**Erkennung**
-- Node-RED Anomalieerkennung
-- Temperaturspitzen-Alarme
-- Erkennung unbekannter machine_id-Werte
-
-**Prävention**
-- MQTT-Broker-Authentifizierung
-- MQTT-ACL (Zugriffskontrolllisten)
-- TLS-Verschlüsselung für MQTT-Verbindungen
-- Grafana-Benachrichtigungen
-
----
-
-*Built with ❤️ as an Industry 4.0 portfolio project*
+*Built with passion for Industry 4.0 + OT Security*

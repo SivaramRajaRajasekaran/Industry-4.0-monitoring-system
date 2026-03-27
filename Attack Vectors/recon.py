@@ -3,7 +3,6 @@ import json
 import time
 from datetime import datetime
 
-# WHY this script exists:
 # Before attacking, an attacker silently observes the system.
 # This script connects to the broker and subscribes to ALL topics.
 # It records everything it sees — message format, timing, machine IDs,
@@ -36,7 +35,7 @@ def on_connect(client, userdata, flags, rc):
         print("Listening silently... press Ctrl+C to see summary")
         print("=" * 60)
         print()
-        # WHY '#' wildcard:
+        # '#' wildcard:
         # In MQTT, # means "match everything at this level and below"
         # factory/# matches factory/machine1/data, factory/machine2/data etc.
         # Just # matches EVERY topic on the entire broker
@@ -137,7 +136,7 @@ client.on_disconnect = on_disconnect
 client.connect(BROKER, PORT, 60)
 
 try:
-    # WHY loop_forever:
+    # loop_forever:
     # Keeps the script running and processing incoming messages
     # until the attacker manually stops it with Ctrl+C
     client.loop_forever()
